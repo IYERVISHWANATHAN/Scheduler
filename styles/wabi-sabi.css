@@ -1,0 +1,175 @@
+/* Wabi Sabi Design System */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+
+:root {
+  /* Wabi Sabi Color Palette - Natural & Earthy */
+  --wabi-clay: #d4b5a0;
+  --wabi-sand: #f5f1eb;
+  --wabi-stone: #9b9b8d;
+  --wabi-charcoal: #3d3d3d;
+  --wabi-sage: #a8b5a0;
+  --wabi-mist: #f9f8f6;
+  --wabi-earth: #8b7355;
+  --wabi-cream: #faf9f7;
+  
+  /* Semantic Colors with Natural Tones */
+  --background: #faf9f7;
+  --foreground: #3d3d3d;
+  --card: rgba(255, 255, 255, 0.1);
+  --card-foreground: #3d3d3d;
+  --popover: #ffffff;
+  --popover-foreground: #3d3d3d;
+  --primary: #8b7355;
+  --primary-foreground: #faf9f7;
+  --secondary: #f5f1eb;
+  --secondary-foreground: #3d3d3d;
+  --muted: #f9f8f6;
+  --muted-foreground: #9b9b8d;
+  --accent: #d4b5a0;
+  --accent-foreground: #3d3d3d;
+  --destructive: #cc6b5a;
+  --destructive-foreground: #faf9f7;
+  --border: #e8e3dd;
+  --input: #f5f1eb;
+  --ring: #8b7355;
+  
+  /* Typography */
+  --font-sans: 'Inter', sans-serif;
+  --font-serif: 'Crimson Text', serif;
+  
+  /* Organic Spacing */
+  --spacing-organic-xs: 0.4rem;
+  --spacing-organic-sm: 0.7rem;
+  --spacing-organic-md: 1.3rem;
+  --spacing-organic-lg: 2.1rem;
+  --spacing-organic-xl: 3.4rem;
+  
+  /* Natural Shadows */
+  --shadow-organic: 0 2px 8px rgba(139, 115, 85, 0.06), 0 1px 3px rgba(139, 115, 85, 0.04);
+  --shadow-organic-lg: 0 8px 25px rgba(139, 115, 85, 0.08), 0 3px 10px rgba(139, 115, 85, 0.06);
+  --shadow-organic-xl: 0 16px 40px rgba(139, 115, 85, 0.12), 0 8px 20px rgba(139, 115, 85, 0.08);
+}
+
+.dark {
+  --background: #2c2a26;
+  --foreground: #f5f1eb;
+  --card: #3d3d3d;
+  --card-foreground: #f5f1eb;
+  --popover: #3d3d3d;
+  --popover-foreground: #f5f1eb;
+  --primary: #d4b5a0;
+  --primary-foreground: #2c2a26;
+  --secondary: #4a453f;
+  --secondary-foreground: #f5f1eb;
+  --muted: #4a453f;
+  --muted-foreground: #9b9b8d;
+  --accent: #8b7355;
+  --accent-foreground: #f5f1eb;
+  --border: #4a453f;
+  --input: #4a453f;
+  --ring: #d4b5a0;
+}
+
+/* Global Styles */
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Wabi Sabi Typography */
+.wabi-heading {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--wabi-charcoal);
+}
+
+.wabi-body {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  color: var(--wabi-stone);
+}
+
+.wabi-accent-text {
+  color: var(--wabi-earth);
+  font-weight: 500;
+}
+
+/* Natural Textures & Patterns */
+.wabi-texture-paper {
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(212, 181, 160, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(139, 115, 85, 0.02) 0%, transparent 50%),
+    radial-gradient(circle at 40% 80%, rgba(168, 181, 160, 0.02) 0%, transparent 50%);
+}
+
+.wabi-gradient-organic {
+  background: linear-gradient(135deg, 
+    var(--wabi-cream) 0%,
+    var(--wabi-sand) 50%,
+    var(--wabi-mist) 100%);
+}
+
+/* Organic Shapes & Borders */
+.wabi-border-organic {
+  border-radius: 0.75rem 1rem 0.5rem 0.875rem;
+  border: 1px solid var(--border);
+}
+
+.wabi-card {
+  background: var(--card);
+  border-radius: 0.75rem 1rem 0.5rem 0.875rem;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-organic);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.wabi-card:hover {
+  box-shadow: var(--shadow-organic-lg);
+  transform: translateY(-2px);
+}
+
+/* Category Colors - Natural Palette */
+.category-liquor {
+  background: linear-gradient(135deg, #e8d5c4 0%, #d4b5a0 100%);
+  color: #6b4e3d;
+  border-color: #c9a892;
+}
+
+.category-tobacco {
+  background: linear-gradient(135deg, #e0c7a8 0%, #c9a87c 100%);
+  color: #7a5d3f;
+  border-color: #b8956d;
+}
+
+.category-pnc {
+  background: linear-gradient(135deg, #d0ddd4 0%, #a8b5a0 100%);
+  color: #4a5c47;
+  border-color: #96a489;
+}
+
+.category-confectionary {
+  background: linear-gradient(135deg, #f0e4d6 0%, #e2c8b5 100%);
+  color: #8b6f5c;
+  border-color: #d1b6a3;
+}
+
+.category-fashion {
+  background: linear-gradient(135deg, #e6d9c7 0%, #d0b8a0 100%);
+  color: #7d6250;
+  border-color: #bfa589;
+}
+
+.category-destination {
+  background: linear-gradient(135deg, #f2f0e8 0%, #e0d5c7 100%);
+  color: #918273;
+  border-color: #ccc0b2;
+}

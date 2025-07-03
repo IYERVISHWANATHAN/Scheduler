@@ -1,0 +1,544 @@
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { format, addWeeks, subWeeks, startOfWeek, endOfWeek } from "date-fns";
+import { Calendar, Plus, Download, Upload, ChevronLeft, ChevronRight, Grid3X3, User, LogOut, Settings, TrendingUp, FolderOpen, Link2, ExternalLink, CalendarDays, Lock, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { WeekView } from "@/components/week-view";
+import { CalendarView } from "@/components/calendar-view";
+import { MeetingForm } from "@/components/meeting-form";
+import { CalendarIntegration } from "@/components/calendar-integration";
+import { ChangePasswordDialog } from "@/components/change-password-dialog";
+import { formatDate, getCategoryColor } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
+import { useLocation } from "wouter";
+import type { Meeting } from "@shared/schema";
+
+export default function WeekPage() {
+  const [selectedDate, setSelectedDate] = useState(new Date(2025, 8, 28)); // September 28, 2025
+  const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
+  const [showMeetingForm, setShowMeetingForm] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
+  const [showCalendarIntegration, setShowCalendarIntegration] = useState(false);
+  const [selectedMeetingForCalendar, setSelectedMeetingForCalendar] = useState<Meeting | null>(null);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { user, permissions, logout } = useAuth();
+  const [, setLocation] = useLocation();
+  
+  const weekStart = startOfWeek(selectedDate, { weekStartsOn: 0 });
+  const weekEnd = endOfWeek(selectedDate, { weekStartsOn: 0 });
+  
+  // Fetch meetings for the entire week
+  const { data: allMeetings = [], isLoading } = useQuery<Meeting[]>({
+    queryKey: ['/api/meetings'],
+    enabled: true
+  });
+
+  // Filter meetings for the current week
+  const weekMeetings = allMeetings.filter((meeting: Meeting) => {
+    const meetingDate = new Date(meeting.date);
+    return meetingDate >= weekStart && meetingDate <= weekEnd;
+  });
+
+  const handlePreviousWeek = () => {
+    setSelectedDate(prev => subWeeks(prev, 1));
+  };
+
+  const handleNextWeek = () => {
+    setSelectedDate(prev => addWeeks(prev, 1));
+  };
+
+  const handleGoToToday = () => {
+    setSelectedDate(new Date());
+  };
+
+  const handleDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = new Date(event.target.value);
+    if (!isNaN(newDate.getTime())) {
+      setSelectedDate(newDate);
+    }
+  };
+
+  const handleScheduleMeeting = () => {
+    if (!permissions?.canSchedule) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to schedule meetings",
+        variant: "destructive"
+      });
+      return;
+    }
+    setEditingMeeting(null);
+    setShowMeetingForm(true);
+  };
+
+  const handleEditMeeting = (meeting: Meeting) => {
+    if (!permissions?.canEdit) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to edit meetings",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check if user has access to this meeting's category
+    if (!permissions?.categories?.includes(meeting.category)) {
+      toast({
+        title: "Access Denied",
+        description: `You don't have permission to edit ${meeting.category} meetings`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setEditingMeeting(meeting);
+    setShowMeetingForm(true);
+  };
+
+  const handleMeetingSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/meetings'] });
+  };
+
+  // Import mutation
+  const importMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/import/excel', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Import failed');
+      }
+      
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Import Successful",
+        description: data.message,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/meetings'] });
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Import Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      importMutation.mutate(file);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      const response = await fetch('/api/export/excel');
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'calendar.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast({
+          title: "Success",
+          description: "Calendar exported as Excel file"
+        });
+      } else {
+        throw new Error('Export failed');
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to export Excel file",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleExportICal = async () => {
+    try {
+      const response = await fetch('/api/export/ical');
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'calendar.ics';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast({
+          title: "Success",
+          description: "Calendar exported as iCal file"
+        });
+      } else {
+        throw new Error('Export failed');
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to export iCal file",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    setLocation('/login');
+  };
+
+  const handleSelectDate = (date: Date) => {
+    setSelectedDate(date);
+    setViewMode('day');
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+          <div className="flex justify-between items-center h-14 sm:h-16">
+            <div className="flex items-center">
+              <Calendar className="text-blue-600 text-xl sm:text-2xl mr-2 sm:mr-3" />
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">Meeting Scheduler</h1>
+            </div>
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              {permissions?.canSchedule && (
+                <Button onClick={handleScheduleMeeting} className="bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm px-2 sm:px-4">
+                  <Plus className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">Schedule Meeting</span>
+                  <span className="sm:hidden">Add</span>
+                </Button>
+              )}
+              {user?.role !== 'vendor' && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      disabled={importMutation.isPending}
+                      className="text-xs sm:text-sm px-2 sm:px-4"
+                    >
+                      <FolderOpen className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">File Management</span>
+                      <span className="sm:hidden">Files</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    {permissions?.canSchedule && (
+                      <>
+                        <DropdownMenuItem onClick={handleImportClick}>
+                          <Upload className="mr-2 h-4 w-4" />
+                          Import Excel File
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => window.open('/api/template/excel', '_blank')}>
+                          <Download className="mr-2 h-4 w-4" />
+                          Download Template
+                        </DropdownMenuItem>
+                        <div className="border-t my-1"></div>
+                      </>
+                    )}
+                    <DropdownMenuItem onClick={handleExportExcel}>
+                      <i className="fas fa-file-excel mr-2 text-green-600"></i>
+                      Export as Excel
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportICal}>
+                      <i className="fas fa-calendar mr-2 text-blue-600"></i>
+                      Export as iCal
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              <ThemeToggle />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="text-xs sm:text-sm px-2 sm:px-4">
+                    <User className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="truncate max-w-24 sm:max-w-none">{user?.name}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {user?.role !== 'vendor' && (
+                    <DropdownMenuItem onClick={() => setLocation('/meetings')}>
+                      <Calendar className="mr-2 h-4 w-4" />
+                      Day-wise Meeting List
+                    </DropdownMenuItem>
+                  )}
+                  {user?.role !== 'vendor' && (
+                    <DropdownMenuItem onClick={() => setLocation('/analytics')}>
+                      <TrendingUp className="mr-2 h-4 w-4" />
+                      Analytics & Reports
+                    </DropdownMenuItem>
+                  )}
+                  {user?.role !== 'vendor' && (
+                    <DropdownMenuItem onClick={() => setLocation('/conflicts')}>
+                      <AlertTriangle className="mr-2 h-4 w-4" />
+                      Conflict Resolver
+                    </DropdownMenuItem>
+                  )}
+                  {user?.role !== 'vendor' && (
+                    <DropdownMenuItem onClick={() => {
+                      if (allMeetings && allMeetings.length > 0) {
+                        setSelectedMeetingForCalendar(allMeetings[0]);
+                        setShowCalendarIntegration(true);
+                      } else {
+                        toast({
+                          title: "No meetings found",
+                          description: "Create a meeting first to use calendar integration.",
+                          variant: "destructive"
+                        });
+                      }
+                    }}>
+                      <Link2 className="mr-2 h-4 w-4" />
+                      Calendar Integration
+                    </DropdownMenuItem>
+                  )}
+                  {user?.role !== 'vendor' && (
+                    <DropdownMenuItem onClick={() => setShowChangePassword(true)}>
+                      <Lock className="mr-2 h-4 w-4" />
+                      Change Password
+                    </DropdownMenuItem>
+                  )}
+                  {user?.role === 'admin' && (
+                    <DropdownMenuItem onClick={() => setLocation('/settings')}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      User Settings
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Category Legend */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="py-3">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Category Legend</h3>
+            <div className="flex flex-wrap gap-4">
+              {[
+                { key: 'liquor', label: 'Liquor' },
+                { key: 'tobacco', label: 'Tobacco' },
+                { key: 'confectionary', label: 'Confectionary' },
+                { key: 'pnc', label: 'PNC' },
+                { key: 'fashion', label: 'Fashion' }
+              ].map(category => (
+                <div key={category.key} className="flex items-center">
+                  <div 
+                    className="w-4 h-4 rounded mr-2"
+                    style={{ backgroundColor: getCategoryColor(category.key) }}
+                  />
+                  <span className="text-sm text-gray-600">{category.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 space-y-3 sm:space-y-0">
+            <div className="flex items-center justify-between sm:justify-start sm:space-x-4">
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={handlePreviousWeek}
+                className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex-1 text-center sm:text-left px-2">
+                {viewMode === 'week' ? (
+                  <h2 className="text-sm sm:text-lg font-semibold text-gray-900">
+                    {format(weekStart, 'MMM d')} - {format(weekEnd, 'MMM d, yyyy')}
+                  </h2>
+                ) : (
+                  <h2 className="text-sm sm:text-lg font-semibold text-gray-900">
+                    {formatDate(selectedDate)}
+                  </h2>
+                )}
+              </div>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={handleNextWeek}
+                className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex items-center justify-center sm:justify-end space-x-2">
+              <span className="text-xs sm:text-sm text-gray-500 hidden sm:inline">Go to week:</span>
+              <div className="flex items-center space-x-1">
+                <Input 
+                  type="date" 
+                  value={format(selectedDate, 'yyyy-MM-dd')}
+                  onChange={handleDateChange}
+                  className="w-32 sm:w-auto text-xs sm:text-sm"
+                  title="Select a date to jump to that week"
+                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-8 h-8 sm:w-9 sm:h-9 p-0"
+                      title="Open calendar picker"
+                    >
+                      <CalendarDays className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={(date) => {
+                        if (date) {
+                          setSelectedDate(date);
+                        }
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 pt-3 sm:pt-0">
+            <Button 
+              variant={viewMode === 'week' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('week')}
+            >
+              <Grid3X3 className="mr-2 h-4 w-4" />
+              Week
+            </Button>
+            <Button 
+              variant={viewMode === 'day' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('day')}
+            >
+              <Calendar className="mr-2 h-4 w-4" />
+              Day
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={handleGoToToday}
+              className="text-blue-600 hover:text-blue-700"
+            >
+              Today
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500">Loading calendar...</div>
+          </div>
+        ) : viewMode === 'week' ? (
+          <WeekView 
+            meetings={weekMeetings}
+            selectedDate={selectedDate}
+            onEditMeeting={handleEditMeeting}
+            onSelectDate={handleSelectDate}
+            userRole={user?.role}
+            canViewDetails={permissions?.canView !== false}
+          />
+        ) : (
+          <CalendarView 
+            meetings={allMeetings}
+            selectedDate={selectedDate}
+            onEditMeeting={handleEditMeeting}
+            userRole={user?.role}
+            canViewDetails={permissions?.canView !== false}
+          />
+        )}
+      </div>
+
+      {/* Meeting Form Modal */}
+      {permissions?.canSchedule && (
+        <MeetingForm 
+          open={showMeetingForm}
+          onClose={() => setShowMeetingForm(false)}
+          onSuccess={handleMeetingSuccess}
+          selectedDate={selectedDate}
+          editingMeeting={editingMeeting}
+        />
+      )}
+
+      {/* Calendar Integration Dialog */}
+      {showCalendarIntegration && selectedMeetingForCalendar && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <CalendarIntegration 
+            meeting={selectedMeetingForCalendar}
+            onClose={() => {
+              setShowCalendarIntegration(false);
+              setSelectedMeetingForCalendar(null);
+            }}
+          />
+        </div>
+      )}
+
+      {/* Change Password Dialog */}
+      <ChangePasswordDialog 
+        open={showChangePassword}
+        onClose={() => setShowChangePassword(false)}
+      />
+
+      {/* Hidden file input for import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+      />
+    </div>
+  );
+}
